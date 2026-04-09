@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import type { KhamLamSang, MedicalRecord, PatientInfo, VisitInfo } from '../types/medicalRecord'
 
 export type Speaker = 'doctor' | 'patient'
 
@@ -18,48 +19,60 @@ export interface TranscriptTurn {
   text: string
 }
 
-export interface SoapDraft {
-  subjective: string
-  objective: string
-  assessment: string
-  plan: string
-}
-
 const scriptedTurns: TranscriptTurn[] = [
-  { speaker: 'doctor', text: 'Anh đến khám vì triệu chứng gì hôm nay?' },
+  { speaker: 'doctor', text: 'Anh/chị đến khám vì lý do gì hôm nay?' },
   { speaker: 'patient', text: 'Tôi đau bụng vùng thượng vị và buồn nôn khoảng 3 ngày.' },
   { speaker: 'doctor', text: 'Cơn đau tăng sau ăn hay lúc đói?' },
   { speaker: 'patient', text: 'Đau tăng sau ăn đồ chua cay, đôi lúc ợ chua.' },
-  { speaker: 'doctor', text: 'Tôi sẽ cho chỉ định nội soi dạ dày để kiểm tra thêm.' },
+  { speaker: 'doctor', text: 'Tôi sẽ chỉ định nội soi và xét nghiệm máu để đánh giá thêm.' },
 ]
 
-const initialSoap: SoapDraft = {
-  subjective:
-    'Đau bụng vùng thượng vị 3 ngày, đau tăng sau ăn chua cay, kèm ợ chua và buồn nôn.',
-  objective: 'Ấn đau nhẹ vùng thượng vị, không phản ứng thành bụng, sinh hiệu ổn định.',
-  assessment: 'K21.9 - Trào ngược dạ dày thực quản (GERD), theo dõi viêm dạ dày.',
-  plan:
-    'Pantoprazole 40mg mỗi sáng trước ăn. Dặn dò kiêng đồ chua cay, tái khám sau 2 tuần. Hướng dẫn dùng thuốc: sau khi chăn trâu (??).',
+const initialMedicalRecord: MedicalRecord = {
+  patient: {
+    ho_ten: 'Nguyễn Văn A',
+    gioi_tinh: 'Nam',
+    ngay_sinh: '1988-05-20',
+    dia_chi: 'Q. Bình Thạnh, TP.HCM',
+    patient_id: 'BN-2026-00001',
+  },
+  visit: {
+    ngay_kham: '2026-04-09',
+    benh_su: 'Chưa ghi nhận dị ứng thuốc.',
+    ly_do_kham: 'Đau bụng vùng thượng vị 3 ngày, buồn nôn.',
+    trieu_chung: 'Đau tăng sau ăn đồ chua cay, đôi lúc ợ chua.',
+    kham_lam_sang: {
+      nhan_xet_chung: 'Tỉnh táo, tiếp xúc tốt, sinh hiệu ổn định.',
+      cam_xuc: 'Lo lắng nhẹ vì đau kéo dài.',
+      tu_duy: 'Mạch lạc, trả lời đúng trọng tâm.',
+      tri_giac: 'Không ghi nhận rối loạn tri giác/ảo giác.',
+      hanh_vi: 'Hợp tác khám, hành vi phù hợp.',
+    },
+    xet_nghiem: ['Nội soi dạ dày tá tràng', 'Xét nghiệm máu cơ bản'],
+    chan_doan: 'Trào ngược dạ dày thực quản (GERD), theo dõi viêm dạ dày.',
+    chan_doan_icd: 'K21.9',
+    huong_dieu_tri: 'Pantoprazole 40mg uống buổi sáng trước ăn 30 phút.',
+    dan_do: 'Kiêng đồ chua cay, tái khám sau 2 tuần. Hướng dẫn dùng thuốc: sau khi chăn trâu (??).',
+    ngay_tai_kham: '2026-04-23',
+  },
 }
 
 interface ClinicalScribeContextValue {
   showToast: boolean
-  showModal: boolean
   isRecording: boolean
   isProcessing: boolean
   showSoap: boolean
   transcriptTurns: TranscriptTurn[]
-  soapDraft: SoapDraft
-  uncertainPhrase: string
+  medicalRecordDraft: MedicalRecord
   recordingTime: string
   canUndo: boolean
   canRedo: boolean
   setShowToast: (open: boolean) => void
-  setShowModal: (open: boolean) => void
-  setUncertainPhrase: (value: string) => void
   handleStartRecording: () => void
   handleStopAndProcess: () => void
-  updateSoapField: (field: keyof SoapDraft, value: string) => void
+  updatePatientField: (field: keyof PatientInfo, value: string) => void
+  updateVisitField: (field: keyof VisitInfo, value: string | string[] | KhamLamSang) => void
+  updateKhamLamSangField: (field: keyof KhamLamSang, value: string) => void
+  toggleXetNghiem: (testName: string) => void
   handleCancelCase: () => void
   undoSoap: () => void
   redoSoap: () => void
@@ -69,17 +82,15 @@ const ClinicalScribeContext = createContext<ClinicalScribeContextValue | undefin
 
 export function ClinicalScribeProvider({ children }: { children: ReactNode }) {
   const [showToast, setShowToast] = useState(false)
-  const [showModal, setShowModal] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [transcriptTurns, setTranscriptTurns] = useState<TranscriptTurn[]>([])
-  const [soapDraft, setSoapDraft] = useState<SoapDraft>(initialSoap)
+  const [medicalRecordDraft, setMedicalRecordDraft] = useState<MedicalRecord>(initialMedicalRecord)
   const [showSoap, setShowSoap] = useState(false)
-  const [uncertainPhrase, setUncertainPhrase] = useState('sau khi chăn trâu (??)')
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
 
-  const soapHistoryRef = useRef<SoapDraft[]>([initialSoap])
+  const soapHistoryRef = useRef<MedicalRecord[]>([initialMedicalRecord])
   const soapHistoryIndexRef = useRef(0)
   const recordingIntervalRef = useRef<number | null>(null)
   const processingTimeoutRef = useRef<number | null>(null)
@@ -96,14 +107,14 @@ export function ClinicalScribeProvider({ children }: { children: ReactNode }) {
     setCanRedo(soapHistoryIndexRef.current < soapHistoryRef.current.length - 1)
   }, [])
 
-  const commitHistory = useCallback((next: SoapDraft) => {
+  const commitHistory = useCallback((next: MedicalRecord) => {
     const base = soapHistoryRef.current.slice(0, soapHistoryIndexRef.current + 1)
     soapHistoryRef.current = [...base, next]
     soapHistoryIndexRef.current = soapHistoryRef.current.length - 1
     syncHistoryFlags()
   }, [syncHistoryFlags])
 
-  const resetSoapHistory = useCallback((value: SoapDraft) => {
+  const resetSoapHistory = useCallback((value: MedicalRecord) => {
     soapHistoryRef.current = [value]
     soapHistoryIndexRef.current = 0
     syncHistoryFlags()
@@ -147,7 +158,6 @@ export function ClinicalScribeProvider({ children }: { children: ReactNode }) {
     setTranscriptTurns([])
     setShowSoap(false)
     setIsProcessing(false)
-    setUncertainPhrase('sau khi chăn trâu (??)')
     setIsRecording(true)
   }, [])
 
@@ -161,18 +171,24 @@ export function ClinicalScribeProvider({ children }: { children: ReactNode }) {
     }
 
     processingTimeoutRef.current = window.setTimeout(() => {
-      setSoapDraft(initialSoap)
+      setMedicalRecordDraft(initialMedicalRecord)
       setShowSoap(true)
       setIsProcessing(false)
-      resetSoapHistory(initialSoap)
+      resetSoapHistory(initialMedicalRecord)
       processingTimeoutRef.current = null
     }, 2200)
   }, [resetSoapHistory])
 
-  const updateSoapField = useCallback(
-    (field: keyof SoapDraft, value: string) => {
-      setSoapDraft((prev) => {
-        const next = { ...prev, [field]: value }
+  const updatePatientField = useCallback(
+    (field: keyof PatientInfo, value: string) => {
+      setMedicalRecordDraft((prev) => {
+        const next: MedicalRecord = {
+          ...prev,
+          patient: {
+            ...prev.patient,
+            [field]: value,
+          },
+        }
         if (JSON.stringify(prev) !== JSON.stringify(next)) {
           commitHistory(next)
         }
@@ -182,14 +198,78 @@ export function ClinicalScribeProvider({ children }: { children: ReactNode }) {
     [commitHistory],
   )
 
+  const updateVisitField = useCallback(
+    (field: keyof VisitInfo, value: string | string[] | KhamLamSang) => {
+      setMedicalRecordDraft((prev) => {
+        const next: MedicalRecord = {
+          ...prev,
+          visit: {
+            ...prev.visit,
+            [field]: value,
+          },
+        }
+        if (JSON.stringify(prev) !== JSON.stringify(next)) {
+          commitHistory(next)
+        }
+        return next
+      })
+    },
+    [commitHistory],
+  )
+
+  const updateKhamLamSangField = useCallback(
+    (field: keyof KhamLamSang, value: string) => {
+      setMedicalRecordDraft((prev) => {
+        const next: MedicalRecord = {
+          ...prev,
+          visit: {
+            ...prev.visit,
+            kham_lam_sang: {
+              ...(prev.visit.kham_lam_sang ?? {}),
+              [field]: value,
+            },
+          },
+        }
+        if (JSON.stringify(prev) !== JSON.stringify(next)) {
+          commitHistory(next)
+        }
+        return next
+      })
+    },
+    [commitHistory],
+  )
+
+  const toggleXetNghiem = useCallback(
+    (testName: string) => {
+      setMedicalRecordDraft((prev) => {
+        const current = prev.visit.xet_nghiem ?? []
+        const hasItem = current.includes(testName)
+        const nextList = hasItem ? current.filter((item) => item !== testName) : [...current, testName]
+
+        const next: MedicalRecord = {
+          ...prev,
+          visit: {
+            ...prev.visit,
+            xet_nghiem: nextList,
+          },
+        }
+
+        if (JSON.stringify(prev) !== JSON.stringify(next)) {
+          commitHistory(next)
+        }
+
+        return next
+      })
+    },
+    [commitHistory],
+  )
+
   const handleCancelCase = useCallback(() => {
-    setShowModal(false)
     setTranscriptTurns([])
     setShowSoap(false)
     setIsRecording(false)
     setIsProcessing(false)
-    setSoapDraft(initialSoap)
-    setUncertainPhrase('sau khi chăn trâu (??)')
+    setMedicalRecordDraft(initialMedicalRecord)
 
     if (recordingIntervalRef.current) {
       window.clearInterval(recordingIntervalRef.current)
@@ -201,7 +281,7 @@ export function ClinicalScribeProvider({ children }: { children: ReactNode }) {
       processingTimeoutRef.current = null
     }
 
-    resetSoapHistory(initialSoap)
+    resetSoapHistory(initialMedicalRecord)
   }, [resetSoapHistory])
 
   useEffect(() => {
@@ -218,36 +298,35 @@ export function ClinicalScribeProvider({ children }: { children: ReactNode }) {
   const undoSoap = useCallback(() => {
     if (soapHistoryIndexRef.current <= 0) return
     soapHistoryIndexRef.current -= 1
-    setSoapDraft(soapHistoryRef.current[soapHistoryIndexRef.current])
+    setMedicalRecordDraft(soapHistoryRef.current[soapHistoryIndexRef.current])
     syncHistoryFlags()
   }, [syncHistoryFlags])
 
   const redoSoap = useCallback(() => {
     if (soapHistoryIndexRef.current >= soapHistoryRef.current.length - 1) return
     soapHistoryIndexRef.current += 1
-    setSoapDraft(soapHistoryRef.current[soapHistoryIndexRef.current])
+    setMedicalRecordDraft(soapHistoryRef.current[soapHistoryIndexRef.current])
     syncHistoryFlags()
   }, [syncHistoryFlags])
 
   const value = useMemo<ClinicalScribeContextValue>(
     () => ({
       showToast,
-      showModal,
       isRecording,
       isProcessing,
       showSoap,
       transcriptTurns,
-      soapDraft,
-      uncertainPhrase,
+      medicalRecordDraft,
       recordingTime,
       canUndo,
       canRedo,
       setShowToast,
-      setShowModal,
-      setUncertainPhrase,
       handleStartRecording,
       handleStopAndProcess,
-      updateSoapField,
+      updatePatientField,
+      updateVisitField,
+      updateKhamLamSangField,
+      toggleXetNghiem,
       handleCancelCase,
       undoSoap,
       redoSoap,
@@ -260,16 +339,17 @@ export function ClinicalScribeProvider({ children }: { children: ReactNode }) {
       handleStopAndProcess,
       isProcessing,
       isRecording,
+      medicalRecordDraft,
       recordingTime,
       redoSoap,
-      showModal,
       showSoap,
       showToast,
-      soapDraft,
       transcriptTurns,
-      uncertainPhrase,
       undoSoap,
-      updateSoapField,
+      updateKhamLamSangField,
+      updatePatientField,
+      updateVisitField,
+      toggleXetNghiem,
     ],
   )
 

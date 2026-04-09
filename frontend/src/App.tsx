@@ -19,14 +19,17 @@ function App() {
     isProcessing,
     showSoap,
     transcriptTurns,
-    soapDraft,
+    medicalRecordDraft,
     recordingTime,
     canUndo,
     canRedo,
     setShowToast,
     handleStartRecording,
     handleStopAndProcess,
-    updateSoapField,
+    updatePatientField,
+    updateVisitField,
+    updateKhamLamSangField,
+    toggleXetNghiem,
     handleCancelCase,
     undoSoap,
     redoSoap,
@@ -92,10 +95,10 @@ function App() {
 
   const confirmDescription =
     confirmType === 'save'
-      ? 'Bản SOAP hiện tại sẽ được lưu vào hồ sơ bệnh án.'
+      ? 'Hồ sơ bệnh án có cấu trúc hiện tại sẽ được lưu.'
       : confirmType === 'newCase'
-        ? 'Thao tác này sẽ xoá transcript và bản nháp hiện tại để bắt đầu ca mới.'
-        : 'Thao tác này sẽ huỷ toàn bộ dữ liệu transcript và bản nháp SOAP hiện tại.'
+        ? 'Thao tác này sẽ xoá transcript và hồ sơ hiện tại để bắt đầu ca mới.'
+        : 'Thao tác này sẽ huỷ toàn bộ dữ liệu transcript và hồ sơ bệnh án hiện tại.'
 
   const confirmButtonText = confirmType === 'save' ? 'Lưu bệnh án' : confirmType === 'newCase' ? 'Ca mới' : 'Huỷ'
 
@@ -112,7 +115,9 @@ function App() {
     setConfirmType(null)
   }
 
-  const reviewTokens = getReviewTokens(soapDraft.plan)
+  const xetNghiemOptions = ['Nội soi dạ dày tá tràng', 'Xét nghiệm máu cơ bản', 'Test HP hơi thở']
+  const danDoText = medicalRecordDraft.visit.dan_do ?? ''
+  const reviewTokens = getReviewTokens(danDoText)
   const hasSelectedToken =
     selectedHighlightStart !== null && reviewTokens.some((token) => token.start === selectedHighlightStart)
 
@@ -138,13 +143,13 @@ function App() {
     let nextPlan = ''
 
     selectedTokens.forEach((token) => {
-      nextPlan += soapDraft.plan.slice(cursor, token.start)
+      nextPlan += danDoText.slice(cursor, token.start)
       cursor = token.end
     })
 
-    nextPlan += soapDraft.plan.slice(cursor)
+    nextPlan += danDoText.slice(cursor)
 
-    updateSoapField('plan', nextPlan.replace(/\s{2,}/g, ' ').trim())
+    updateVisitField('dan_do', nextPlan.replace(/\s{2,}/g, ' ').trim())
     setSelectedHighlightStart(null)
     setHighlightDecisions({})
   }
@@ -159,7 +164,10 @@ function App() {
             </div>
             <div>
               <h1 className="text-xl font-semibold tracking-wide">Vinmec HIS | Clinical Scribe AI</h1>
-              <p className="text-sm text-blue-200">BN: Nguyễn Văn A (ID: BN-2026-00001) • Chuyên khoa Nội</p>
+              <p className="text-sm text-blue-200">
+                BN: {medicalRecordDraft.patient.ho_ten ?? '---'} (ID: {medicalRecordDraft.patient.patient_id ?? '---'}) •
+                Ngày khám: {medicalRecordDraft.visit.ngay_kham ?? '---'}
+              </p>
             </div>
           </div>
 
@@ -232,7 +240,7 @@ function App() {
 
           <section className="flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-              <h2 className="text-sm font-semibold text-gray-700">SOAP Draft</h2>
+              <h2 className="text-sm font-semibold text-gray-700">MedicalRecord Draft</h2>
               <Badge variant="ai">{showSoap ? 'AI Generated' : 'Chờ xử lý AI'}</Badge>
             </div>
 
@@ -253,38 +261,67 @@ function App() {
               {!isProcessing && showSoap ? (
                 <>
                   <article className="rounded-lg border border-gray-200 bg-gray-50 p-3 md:col-span-1">
-                    <h3 className="mb-2 text-sm font-semibold text-gray-700">S - Subjective</h3>
+                    <h3 className="mb-2 text-sm font-semibold text-gray-700">Patient - Thông tin bệnh nhân</h3>
                     <p
                       className="min-h-20 whitespace-pre-line rounded border border-transparent bg-white/70 p-2 text-sm text-gray-600 focus:border-blue-300 focus:outline-none"
                       contentEditable
                       suppressContentEditableWarning
-                      onBlur={(e) => updateSoapField('subjective', e.currentTarget.textContent ?? '')}
+                      onBlur={(e) => {
+                        const lines = (e.currentTarget.textContent ?? '').split('\n')
+                        updatePatientField('ho_ten', lines[0]?.replace('Họ tên: ', '')?.trim() ?? '')
+                        updatePatientField('patient_id', lines[1]?.replace('Mã BN: ', '')?.trim() ?? '')
+                        updatePatientField('gioi_tinh', lines[2]?.replace('Giới tính: ', '')?.trim() ?? '')
+                        updatePatientField('ngay_sinh', lines[3]?.replace('Ngày sinh: ', '')?.trim() ?? '')
+                        updatePatientField('dia_chi', lines[4]?.replace('Địa chỉ: ', '')?.trim() ?? '')
+                      }}
                     >
-                      {soapDraft.subjective}
+                      {`Họ tên: ${medicalRecordDraft.patient.ho_ten ?? ''}
+Mã BN: ${medicalRecordDraft.patient.patient_id ?? ''}
+Giới tính: ${medicalRecordDraft.patient.gioi_tinh ?? ''}
+Ngày sinh: ${medicalRecordDraft.patient.ngay_sinh ?? ''}
+Địa chỉ: ${medicalRecordDraft.patient.dia_chi ?? ''}`}
                     </p>
                   </article>
 
                   <article className="rounded-lg border border-gray-200 bg-gray-50 p-3 md:col-span-1">
-                    <h3 className="mb-2 text-sm font-semibold text-gray-700">O - Objective</h3>
+                    <h3 className="mb-2 text-sm font-semibold text-gray-700">Visit - Lý do khám & triệu chứng</h3>
                     <p
                       className="min-h-20 whitespace-pre-line rounded border border-transparent bg-white/70 p-2 text-sm text-gray-600 focus:border-blue-300 focus:outline-none"
                       contentEditable
                       suppressContentEditableWarning
-                      onBlur={(e) => updateSoapField('objective', e.currentTarget.textContent ?? '')}
+                      onBlur={(e) => {
+                        const lines = (e.currentTarget.textContent ?? '').split('\n')
+                        updateVisitField('ngay_kham', lines[0]?.replace('Ngày khám: ', '')?.trim() ?? '')
+                        updateVisitField('benh_su', lines[1]?.replace('Bệnh sử: ', '')?.trim() ?? '')
+                        updateVisitField('ly_do_kham', lines[2]?.replace('Lý do khám: ', '')?.trim() ?? '')
+                        updateVisitField('trieu_chung', lines[3]?.replace('Triệu chứng: ', '')?.trim() ?? '')
+                      }}
                     >
-                      {soapDraft.objective}
+                      {`Ngày khám: ${medicalRecordDraft.visit.ngay_kham ?? ''}
+Bệnh sử: ${medicalRecordDraft.visit.benh_su ?? ''}
+Lý do khám: ${medicalRecordDraft.visit.ly_do_kham ?? ''}
+Triệu chứng: ${medicalRecordDraft.visit.trieu_chung ?? ''}`}
                     </p>
                   </article>
 
                   <article className="rounded-lg border border-gray-200 bg-gray-50 p-3 md:col-span-2">
-                    <h3 className="mb-2 text-sm font-semibold text-gray-700">A - Assessment</h3>
+                    <h3 className="mb-2 text-sm font-semibold text-gray-700">Assessment - Chẩn đoán</h3>
                     <p
                       className="min-h-16 whitespace-pre-line rounded border border-transparent bg-white/70 p-2 text-sm font-medium text-red-600 focus:border-blue-300 focus:outline-none"
                       contentEditable
                       suppressContentEditableWarning
-                      onBlur={(e) => updateSoapField('assessment', e.currentTarget.textContent ?? '')}
+                      onBlur={(e) => {
+                        const lines = (e.currentTarget.textContent ?? '').split('\n')
+                        updateVisitField('chan_doan', lines[0]?.replace('Chẩn đoán: ', '')?.trim() ?? '')
+                        updateVisitField('chan_doan_icd', lines[1]?.replace('ICD-10: ', '')?.trim() ?? '')
+                        updateVisitField('ngay_tai_kham', lines[2]?.replace('Ngày tái khám: ', '')?.trim() ?? '')
+                        updateKhamLamSangField('nhan_xet_chung', lines[3]?.replace('Khám LS: ', '')?.trim() ?? '')
+                      }}
                     >
-                      {soapDraft.assessment}
+                      {`Chẩn đoán: ${medicalRecordDraft.visit.chan_doan ?? ''}
+ICD-10: ${medicalRecordDraft.visit.chan_doan_icd ?? ''}
+Ngày tái khám: ${medicalRecordDraft.visit.ngay_tai_kham ?? ''}
+Khám LS: ${medicalRecordDraft.visit.kham_lam_sang?.nhan_xet_chung ?? ''}`}
                     </p>
                   </article>
 
@@ -293,50 +330,62 @@ function App() {
                       Cần Review
                     </div>
 
-                    <h3 className="mb-2 border-b border-blue-200 pb-1 text-sm font-semibold text-blue-800">
-                      P (Plan) - Kế hoạch & Y lệnh
-                    </h3>
+                    <h3 className="mb-2 border-b border-blue-200 pb-1 text-sm font-semibold text-blue-800">Điều trị & dặn dò</h3>
 
                     <div className="space-y-3 text-sm">
                       <div>
-                        <span className="font-semibold text-gray-700">1. Chỉ định Cận lâm sàng:</span>
+                        <span className="font-semibold text-gray-700">1. Chỉ định Cận lâm sàng (xet_nghiem):</span>
                         <div className="mt-1 flex flex-wrap gap-4 text-gray-600">
-                          <label className="flex items-center">
-                            <input type="checkbox" defaultChecked className="mr-2" /> Nội soi dạ dày tá tràng
-                          </label>
-                          <label className="flex items-center">
-                            <input type="checkbox" defaultChecked className="mr-2" /> Xét nghiệm máu cơ bản
-                          </label>
-                          <label className="flex items-center">
-                            <input type="checkbox" className="mr-2" /> Test HP hơi thở
-                          </label>
+                          {xetNghiemOptions.map((option) => (
+                            <label className="flex items-center" key={option}>
+                              <input
+                                type="checkbox"
+                                checked={(medicalRecordDraft.visit.xet_nghiem ?? []).includes(option)}
+                                onChange={() => toggleXetNghiem(option)}
+                                className="mr-2"
+                              />
+                              {option}
+                            </label>
+                          ))}
                         </div>
                       </div>
 
                       <div>
-                        <span className="font-semibold text-gray-700">2. Đơn thuốc (Dự thảo):</span>
+                        <span className="font-semibold text-gray-700">2. Hướng điều trị (huong_dieu_tri):</span>
+                        <p
+                          className="mt-1 min-h-12 whitespace-pre-line rounded border border-transparent bg-white/70 p-2 text-sm text-gray-700 focus:border-blue-300 focus:outline-none"
+                          contentEditable
+                          suppressContentEditableWarning
+                          onBlur={(e) => updateVisitField('huong_dieu_tri', e.currentTarget.textContent ?? '')}
+                        >
+                          {medicalRecordDraft.visit.huong_dieu_tri ?? ''}
+                        </p>
+                      </div>
+
+                      <div>
+                        <span className="font-semibold text-gray-700">3. Dặn dò (dan_do):</span>
                         <p
                           className="mt-1 min-h-16 whitespace-pre-line rounded border border-transparent bg-white/70 p-2 text-sm text-gray-700 focus:border-blue-300 focus:outline-none"
                           contentEditable
                           suppressContentEditableWarning
-                          onBlur={(e) => updateSoapField('plan', e.currentTarget.textContent ?? '')}
+                          onBlur={(e) => updateVisitField('dan_do', e.currentTarget.textContent ?? '')}
                         >
                           {reviewTokens.length === 0
-                            ? soapDraft.plan
+                            ? danDoText
                             : (() => {
                                 const nodes: ReactNode[] = []
                                 let cursor = 0
 
                                 reviewTokens.forEach((token, idx) => {
                                   if (cursor < token.start) {
-                                    nodes.push(soapDraft.plan.slice(cursor, token.start))
+                                    nodes.push(danDoText.slice(cursor, token.start))
                                   }
 
                                   const decision = highlightDecisions[token.start]
                                   const isSelected = hasSelectedToken && selectedHighlightStart === token.start
 
                                   if (decision === 'accepted') {
-                                    nodes.push(soapDraft.plan.slice(token.start, token.end))
+                                    nodes.push(danDoText.slice(token.start, token.end))
                                   } else {
                                     nodes.push(
                                       <span
@@ -351,7 +400,7 @@ function App() {
                                           setSelectedHighlightStart(token.start)
                                         }}
                                       >
-                                        {soapDraft.plan.slice(token.start, token.end)}
+                                        {danDoText.slice(token.start, token.end)}
                                       </span>,
                                     )
                                   }
@@ -359,8 +408,8 @@ function App() {
                                   cursor = token.end
                                 })
 
-                                if (cursor < soapDraft.plan.length) {
-                                  nodes.push(soapDraft.plan.slice(cursor))
+                                if (cursor < danDoText.length) {
+                                  nodes.push(danDoText.slice(cursor))
                                 }
 
                                 return nodes
